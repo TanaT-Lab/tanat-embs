@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tanat-embs"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "torch",
+    "polars",
+    "scikit-learn",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tanat_embs"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.pylint."MESSAGES CONTROL"]
+max-line-length = 100

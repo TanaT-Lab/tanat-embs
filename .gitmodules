@@ -1,0 +1,3 @@
+[submodule "TanaT"]
+	path = TanaT
+	url = git@github.com:TanaT-Lab/TanaT.git
