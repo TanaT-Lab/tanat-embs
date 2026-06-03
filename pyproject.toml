@@ -1,22 +1,59 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs", "wheel"]
 build-backend = "hatchling.build"
 
 [project]
 name = "tanat-embs"
-version = "0.1.0"
-requires-python = ">=3.10"
+description = "Embedding datasets and encoders for TanaT sequence pools"
 dependencies = [
     "torch",
     "polars",
     "scikit-learn",
+    "TanaT>=0.10.1",
 ]
+requires-python = ">=3.10"
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+]
+readme = "README.md"
+dynamic = ["version"]
+authors = [
+    { name = "Arnaud Duvermy", email = "arnaud.duvermy@inria.fr" },
+    { name = "Thomas Guyet", email = "thomas.guyet@inria.fr" },
+]
+
+[project.license]
+file = "LICENSE.txt"
+
+[project.urls]
+Homepage = "https://github.com/TanaT-Lab/TanaT-embs"
+Source = "https://github.com/TanaT-Lab/TanaT-embs"
+Issues = "https://github.com/TanaT-Lab/TanaT-embs/issues"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+version_scheme = "no-guess-dev"
+local_scheme = "no-local-version"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/tanat_embs/version.py"
+template = """
+VERSION = {version!r}
+VERSION_TUPLE = {version_tuple!r}
+"""
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/tanat_embs"]
 
 [project.optional-dependencies]
-test = ["pytest"]
+test = [
+    "pytest",
+    "pytest-cov",
+]
 
 [tool.pylint."MESSAGES CONTROL"]
 max-line-length = 100
