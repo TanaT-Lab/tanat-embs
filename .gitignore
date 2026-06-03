@@ -1,2 +1,9 @@
-venv/*
-**/__pycache__
+*.pyc
+__pycache__/
+
+version.py
+
+tmp/
+venv/
+.coverage
+coverage.xml
