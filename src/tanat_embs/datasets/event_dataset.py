@@ -5,7 +5,6 @@ EventDataset: row-level PyTorch Dataset wrapping a TanaT SequencePool or Sequenc
 
 from __future__ import annotations
 
-import math
 import warnings
 from typing import Any, Literal
 
@@ -16,7 +15,7 @@ from torch.utils.data import Dataset
 
 from tanat.sequence.base.pool import SequencePool
 from tanat.sequence.base.sequence import Sequence
-from tanat.zeroing.base import _T0, _T0_NEAREST_RANK
+from tanat.zeroing.base import _T0
 
 from ._utils import (
     apply_fill_value,
@@ -72,32 +71,28 @@ class EventDataset(Dataset):
             seq = pool
             metadata = seq.metadata
             settings = seq.settings
-            entity_df = seq.sequence_data(output_format="polars")
-            static_df_raw = seq.static_data(output_format="polars")
+            entity_df = seq.temporal_data(fmt="polars")
+            static_df_raw = seq.static_data(fmt="polars")
             t0_dict: dict[Any, Any] = {seq.id_value: seq.t0}
-            is_single_sequence = True
         elif isinstance(pool, SequencePool):
             metadata = pool.metadata
             settings = pool.settings
-            entity_df = pool.sequence_data(output_format="polars")
-            static_df_raw = pool.static_data(output_format="polars")
+            entity_df = pool.temporal_data(fmt="polars")
+            static_df_raw = pool.static_data(fmt="polars")
             if temporal_encoding == "delay":
-                t0_df = pool.t0_data(output_format="polars")
+                t0_df = pool.t0_data(fmt="polars")
                 id_col_name = settings.id_column
-                t0_dict = dict(
-                    zip(t0_df[id_col_name].to_list(), t0_df[_T0].to_list())
-                )
+                t0_dict = dict(zip(t0_df[id_col_name].to_list(), t0_df[_T0].to_list()))
             else:
                 t0_dict = {}
-            is_single_sequence = False
         else:
             raise TypeError(
                 f"Expected SequencePool or Sequence, got {type(pool).__name__}."
             )
 
         id_col = settings.id_column
-        temporal_cols = settings.get_temporal_columns()
-        is_datetime = metadata.temporal.is_datetime
+        temporal_cols = settings.get_time_columns()
+        is_datetime = metadata.time_index.is_datetime
 
         # ------------------------------------------------------------------ #
         # 2. Resolve feature lists                                            #
@@ -147,7 +142,9 @@ class EventDataset(Dataset):
         # ------------------------------------------------------------------ #
         # 4. Validate feature types and build dimension maps                  #
         # ------------------------------------------------------------------ #
-        feature_dims = validate_and_build_feature_dims(metadata, entity_names, is_static=False)
+        feature_dims = validate_and_build_feature_dims(
+            metadata, entity_names, is_static=False
+        )
         static_feature_dims = (
             validate_and_build_feature_dims(metadata, static_names, is_static=True)
             if static_names
@@ -164,9 +161,7 @@ class EventDataset(Dataset):
         # 5. Warn if any sequence lacks T0 (delay mode)                       #
         # ------------------------------------------------------------------ #
         if temporal_encoding == "delay":
-            missing_t0 = [
-                str(sid) for sid, t0 in t0_dict.items() if t0 is None
-            ]
+            missing_t0 = [str(sid) for sid, t0 in t0_dict.items() if t0 is None]
             if missing_t0:
                 warnings.warn(
                     f"Sequences without a T0 value: {missing_t0}. "
@@ -191,7 +186,11 @@ class EventDataset(Dataset):
             if static_df_raw is not None:
                 for row in static_df_raw.iter_rows(named=True):
                     sid = row[id_col]
-                    label_lookup[sid] = float(row[label_feature])
+                    label_lookup[sid] = (
+                        float("nan")
+                        if row[label_feature] is None
+                        else float(row[label_feature])
+                    )
 
         # ------------------------------------------------------------------ #
         # 7. Store collected data                                             #
@@ -200,7 +199,9 @@ class EventDataset(Dataset):
         keep_cols = [id_col] + temporal_cols + entity_names
         if label_feature is not None and not label_is_static:
             keep_cols.append(label_feature)
-        self._entity_df = entity_df.select([c for c in keep_cols if c in entity_df.columns])
+        self._entity_df = entity_df.select(
+            [c for c in keep_cols if c in entity_df.columns]
+        )
 
         self._id_col = id_col
         self._temporal_cols = temporal_cols
@@ -244,7 +245,9 @@ class EventDataset(Dataset):
             ValueError: If temporal_encoding='delay' and the sequence has no T0.
         """
         if idx < 0 or idx >= len(self):
-            raise IndexError(f"Index {idx} out of range for dataset of size {len(self)}.")
+            raise IndexError(
+                f"Index {idx} out of range for dataset of size {len(self)}."
+            )
 
         row = self._entity_df[idx]
         seq_id = row[self._id_col][0]
@@ -271,7 +274,11 @@ class EventDataset(Dataset):
         # Entity features
         feat_arr = build_feature_array(row, self._entity_names, self.feature_dims)
         feat_arr = apply_fill_value(
-            feat_arr.reshape(-1).astype(np.float32) if feat_arr.ndim == 0 else feat_arr.astype(np.float32),
+            (
+                feat_arr.reshape(-1).astype(np.float32)
+                if feat_arr.ndim == 0
+                else feat_arr.astype(np.float32)
+            ),
             self._fill_value,
             seq_id,
             self._entity_names,
@@ -284,7 +291,9 @@ class EventDataset(Dataset):
         # Static features
         if self._static_names and seq_id in self._static_lookup:
             static_arr = self._static_lookup[seq_id]
-            static_arr = apply_fill_value(static_arr, self._fill_value, seq_id, self._static_names)
+            static_arr = apply_fill_value(
+                static_arr, self._fill_value, seq_id, self._static_names
+            )
             result["static"] = to_tensor(static_arr)
 
         # Label
@@ -302,7 +311,11 @@ class EventDataset(Dataset):
                 seq_id,
                 [self._label_feature],
             )
-            result["label"] = torch.tensor(label_arr[0] if label_arr.ndim == 1 and len(label_arr) == 1 else label_arr[0])
+            result["label"] = torch.tensor(
+                label_arr[0]
+                if label_arr.ndim == 1 and len(label_arr) == 1
+                else label_arr[0]
+            )
 
         return result
 
