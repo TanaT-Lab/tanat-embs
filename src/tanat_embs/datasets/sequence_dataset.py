@@ -9,12 +9,11 @@ import warnings
 from typing import Any, Literal
 
 import numpy as np
-import polars as pl
 import torch
 from torch.utils.data import Dataset
 
 from tanat.sequence.base.pool import SequencePool
-from tanat.zeroing.base import _T0, _T0_NEAREST_RANK
+from tanat.zeroing.base import _T0
 
 from ._utils import (
     apply_fill_value,
@@ -73,8 +72,8 @@ class SequenceDataset(Dataset):
         metadata = pool.metadata
         settings = pool.settings
         id_col = settings.id_column
-        temporal_cols = settings.get_temporal_columns()
-        is_datetime = metadata.temporal.is_datetime
+        temporal_cols = settings.get_time_columns()
+        is_datetime = metadata.time_index.is_datetime
 
         # ------------------------------------------------------------------ #
         # 1. Resolve feature lists                                            #
@@ -121,7 +120,9 @@ class SequenceDataset(Dataset):
         # ------------------------------------------------------------------ #
         # 3. Validate feature types and build dimension maps                  #
         # ------------------------------------------------------------------ #
-        feature_dims = validate_and_build_feature_dims(metadata, entity_names, is_static=False)
+        feature_dims = validate_and_build_feature_dims(
+            metadata, entity_names, is_static=False
+        )
         static_feature_dims = (
             validate_and_build_feature_dims(metadata, static_names, is_static=True)
             if static_names
@@ -133,11 +134,11 @@ class SequenceDataset(Dataset):
         # ------------------------------------------------------------------ #
         # 4. Collect data from pool                                           #
         # ------------------------------------------------------------------ #
-        entity_df = pool.sequence_data(output_format="polars")
-        static_df_raw = pool.static_data(output_format="polars")
+        entity_df = pool.temporal_data(fmt="polars")
+        static_df_raw = pool.static_data(fmt="polars")
 
         if temporal_encoding == "delay":
-            t0_df = pool.t0_data(output_format="polars")
+            t0_df = pool.t0_data(fmt="polars")
             t0_dict: dict[Any, Any] = dict(
                 zip(t0_df[id_col].to_list(), t0_df[_T0].to_list())
             )
@@ -182,7 +183,11 @@ class SequenceDataset(Dataset):
                         row, static_names, static_feature_dims
                     )
                 if label_feature is not None:
-                    label_lookup[sid] = float(row[label_feature])
+                    label_lookup[sid] = (
+                        float("nan")
+                        if row[label_feature] is None
+                        else float(row[label_feature])
+                    )
 
         # ------------------------------------------------------------------ #
         # 6. Store state                                                      #
@@ -233,7 +238,9 @@ class SequenceDataset(Dataset):
             Tensors are zero-padded (or truncated) to ``(max_len, ...)``.
         """
         if idx < 0 or idx >= len(self):
-            raise IndexError(f"Index {idx} out of range for dataset of size {len(self)}.")
+            raise IndexError(
+                f"Index {idx} out of range for dataset of size {len(self)}."
+            )
 
         seq_id = self._seq_ids[idx]
         start, end = self._seq_row_ranges[seq_id]
@@ -261,7 +268,9 @@ class SequenceDataset(Dataset):
         if feat_arr.ndim == 1 and T > 1:
             feat_arr = feat_arr.reshape(T, -1)
         feat_arr = feat_arr.astype(np.float32)
-        feat_arr = apply_fill_value(feat_arr, self._fill_value, seq_id, self._entity_names)
+        feat_arr = apply_fill_value(
+            feat_arr, self._fill_value, seq_id, self._entity_names
+        )
 
         # Padding / truncation
         if self._max_len is not None:
@@ -269,8 +278,14 @@ class SequenceDataset(Dataset):
             actual_T = min(T, L)
 
             # Truncate if needed
-            temporal_arr = temporal_arr[:actual_T] if temporal_arr.ndim == 1 else temporal_arr[:actual_T]
-            feat_arr = feat_arr[:actual_T] if feat_arr.ndim == 2 else feat_arr[:actual_T]
+            temporal_arr = (
+                temporal_arr[:actual_T]
+                if temporal_arr.ndim == 1
+                else temporal_arr[:actual_T]
+            )
+            feat_arr = (
+                feat_arr[:actual_T] if feat_arr.ndim == 2 else feat_arr[:actual_T]
+            )
 
             # Build padded arrays
             if temporal_arr.ndim == 1:
@@ -317,7 +332,10 @@ class SequenceDataset(Dataset):
             label_val = self._label_lookup.get(seq_id, float("nan"))
             label_arr = np.array(label_val, dtype=np.float32)
             label_arr = apply_fill_value(
-                np.atleast_1d(label_arr), self._fill_value, seq_id, [self._label_feature]
+                np.atleast_1d(label_arr),
+                self._fill_value,
+                seq_id,
+                [self._label_feature],
             )
             result["label"] = torch.tensor(label_arr[0])
 
