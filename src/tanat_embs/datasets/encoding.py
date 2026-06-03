@@ -9,23 +9,16 @@ from typing import Any, Literal
 
 import numpy as np
 import polars as pl
-from sklearn.base import BaseEstimator
+from sklearn.base import BaseEstimator, clone
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 
 from tanat.metadata.feature import CategoricalInfo, StringInfo
 from tanat.sequence.base.pool import SequencePool
 
 
-# Categorical-like Polars dtypes that we accept for encoding
-_CATEGORICAL_TYPES = (pl.Categorical, pl.Utf8, pl.String, pl.Enum)
-
-
-def _is_categorical_dtype(dtype: pl.DataType) -> bool:
-    """Return True if *dtype* is a categorical/string type we can encode."""
-    return isinstance(dtype, (pl.Categorical, pl.Utf8, pl.Enum)) or dtype == pl.String
-
-
-def _get_categorical_columns(pool: SequencePool, scope: Literal["entity", "static", "both"]) -> list[tuple[str, bool]]:
+def _get_categorical_columns(
+    pool: SequencePool, scope: Literal["entity", "static", "both"]
+) -> list[tuple[str, bool]]:
     """Return ``[(col_name, is_static), ...]`` for all categorical columns in the scope."""
     result = []
     if scope in ("entity", "both"):
@@ -112,15 +105,12 @@ class CategoricalEncoder:
             return self
 
         # Collect values and fit one sklearn encoder per column
-        entity_df = pool.sequence_data(output_format="polars")
-        static_df = pool.static_data(output_format="polars")
-        id_col = pool.settings.id_column
+        entity_df = pool.temporal_data(fmt="polars")
+        static_df = pool.static_data(fmt="polars")
 
         encodings: dict[str, dict] = {}
         for col_name, is_static in col_list:
-            values = self._get_column_values(
-                col_name, is_static, entity_df, static_df, id_col
-            )
+            values = self._get_column_values(col_name, is_static, entity_df, static_df)
             sk_enc = self._make_sklearn_encoder()
             if isinstance(sk_enc, LabelEncoder):
                 sk_enc.fit(values)
@@ -188,27 +178,33 @@ class CategoricalEncoder:
         if not encodings:
             return new_pool
 
-        entity_df = pool.sequence_data(output_format="polars")
-        static_df = pool.static_data(output_format="polars")
+        entity_df = pool.temporal_data(fmt="polars")
+        static_df = pool.static_data(fmt="polars")
 
         for col_name, enc_info in encodings.items():
             is_static = enc_info["is_static"]
             sk_enc = enc_info["sklearn_encoder"]
             enc_col_name = col_name + suffix
 
-            values = self._get_column_values(
-                col_name, is_static, entity_df, static_df, id_col
-            )
+            values = self._get_column_values(col_name, is_static, entity_df, static_df)
 
             if isinstance(sk_enc, LabelEncoder):
                 encoded = sk_enc.transform(values).astype(np.int64)
                 if is_static:
                     ids = static_df[id_col].to_list()
-                    enc_series = pl.Series(enc_col_name, encoded.tolist(), dtype=pl.Int64)
+                    enc_series = pl.Series(
+                        enc_col_name, encoded.tolist(), dtype=pl.Int64
+                    )
                     enc_df = pl.DataFrame({id_col: ids, enc_col_name: enc_series})
                     new_pool.add_static_features(enc_df)
                 else:
-                    enc_df = pl.DataFrame({enc_col_name: pl.Series(enc_col_name, encoded.tolist(), dtype=pl.Int64)})
+                    enc_df = pl.DataFrame(
+                        {
+                            enc_col_name: pl.Series(
+                                enc_col_name, encoded.tolist(), dtype=pl.Int64
+                            )
+                        }
+                    )
                     new_pool.add_entity_features(enc_df)
             else:
                 # OneHotEncoder
@@ -217,11 +213,15 @@ class CategoricalEncoder:
                 rows = dense.tolist()
                 if is_static:
                     ids = static_df[id_col].to_list()
-                    enc_series = pl.Series(enc_col_name, rows, dtype=pl.Array(pl.Float32, K))
+                    enc_series = pl.Series(
+                        enc_col_name, rows, dtype=pl.Array(pl.Float32, K)
+                    )
                     enc_df = pl.DataFrame({id_col: ids, enc_col_name: enc_series})
                     new_pool.add_static_features(enc_df)
                 else:
-                    enc_series = pl.Series(enc_col_name, rows, dtype=pl.Array(pl.Float32, K))
+                    enc_series = pl.Series(
+                        enc_col_name, rows, dtype=pl.Array(pl.Float32, K)
+                    )
                     enc_df = pl.DataFrame({enc_col_name: enc_series})
                     new_pool.add_entity_features(enc_df)
 
@@ -266,7 +266,7 @@ class CategoricalEncoder:
                 return OneHotEncoder(sparse_output=False)
             raise ValueError(f"Unknown encoder spec '{spec}'. Use 'label' or 'onehot'.")
         # Pre-fitted or unfitted estimator instance — clone it for independence
-        from sklearn.base import clone
+
         return clone(spec)
 
     def _resolve_explicit_columns(
@@ -277,9 +277,19 @@ class CategoricalEncoder:
         If a column exists in both entity and static, both are encoded.
         """
         all_entity = {f.name for f in pool.metadata.entity_features}
-        all_static = {f.name for f in pool.metadata.static_features} if pool.metadata.static_features else set()
-        entity_schema = {name: pool.metadata.feature_info(name, is_static=False) for name in all_entity}
-        static_schema = {name: pool.metadata.feature_info(name, is_static=True) for name in all_static}
+        all_static = (
+            {f.name for f in pool.metadata.static_features}
+            if pool.metadata.static_features
+            else set()
+        )
+        entity_schema = {
+            name: pool.metadata.feature_info(name, is_static=False)
+            for name in all_entity
+        }
+        static_schema = {
+            name: pool.metadata.feature_info(name, is_static=True)
+            for name in all_static
+        }
 
         result = []
         for col in columns:
@@ -315,12 +325,13 @@ class CategoricalEncoder:
         is_static: bool,
         entity_df: pl.DataFrame | None,
         static_df: pl.DataFrame | None,
-        id_col: str,
     ) -> np.ndarray:
         """Extract all values of *col_name* as a 1D numpy array of strings."""
         if is_static:
             if static_df is None:
-                raise ValueError(f"Pool has no static features; cannot encode '{col_name}'.")
+                raise ValueError(
+                    f"Pool has no static features; cannot encode '{col_name}'."
+                )
             return static_df[col_name].cast(pl.String).to_numpy()
         if entity_df is None:
             raise ValueError(f"Pool has no entity data; cannot encode '{col_name}'.")
@@ -379,19 +390,21 @@ class CategoricalDecoder:
             return new_pool
 
         id_col = pool.settings.id_column
-        entity_df = pool.sequence_data(output_format="polars")
-        static_df = pool.static_data(output_format="polars")
+        entity_df = pool.temporal_data(fmt="polars")
+        static_df = pool.static_data(fmt="polars")
 
         for col_name, enc_info in encodings.items():
             is_static = enc_info["is_static"]
             sk_enc = enc_info["sklearn_encoder"]
             enc_col_name = col_name + suffix
-            orig_dtype = enc_info.get("original_dtype", pl.String)
 
             # Check the encoded column is present
             if is_static:
-                available = set(pool.metadata.static_features and
-                                [f.name for f in pool.metadata.static_features] or [])
+                available = set(
+                    pool.metadata.static_features
+                    and [f.name for f in pool.metadata.static_features]
+                    or []
+                )
             else:
                 available = {f.name for f in pool.metadata.entity_features}
 
@@ -415,9 +428,13 @@ class CategoricalDecoder:
                 else:
                     # OneHotEncoder — argmax to pick category
                     if is_static:
-                        raw = np.array(static_df[enc_col_name].to_list(), dtype=np.float32)
+                        raw = np.array(
+                            static_df[enc_col_name].to_list(), dtype=np.float32
+                        )
                     else:
-                        raw = np.array(entity_df[enc_col_name].to_list(), dtype=np.float32)
+                        raw = np.array(
+                            entity_df[enc_col_name].to_list(), dtype=np.float32
+                        )
                     indices = np.argmax(raw, axis=1)
                     # Wrap indices for inverse_transform (expects 2D one-hot)
                     onehot = np.zeros_like(raw)
