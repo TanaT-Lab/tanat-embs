@@ -164,20 +164,18 @@ class TestCategoricalDecoder:
 
     def test_label_roundtrip_values(self, event_pool):
         """Decode should approximately recover the original categorical values."""
-        orig_values = (
-            event_pool.sequence_data(features=["status"], output_format="polars")["status"]
-            .to_list()
-        )
+        orig_values = event_pool.temporal_data(features=["status"], fmt="polars")[
+            "status"
+        ].to_list()
         enc = CategoricalEncoder(
             columns=["status"], encoder="label", drop_original=True, scope="entity"
         )
         encoded = enc.fit_transform(event_pool)
         dec = CategoricalDecoder(enc)
         restored = dec(encoded)
-        restored_values = (
-            restored.sequence_data(features=["status"], output_format="polars")["status"]
-            .to_list()
-        )
+        restored_values = restored.temporal_data(features=["status"], fmt="polars")[
+            "status"
+        ].to_list()
         assert orig_values == restored_values
 
     def test_unfitted_encoder_raises(self):
