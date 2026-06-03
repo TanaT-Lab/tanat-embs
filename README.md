@@ -1,11 +1,11 @@
-# TanaT-embs
-Experiments and implementation of Embeddings facilities
+# tanat-embs
 
+**Experiments and implementation of Embeddings facilities for TanaT.**
 
-## How to install
+[![PyPI version](https://badge.fury.io/py/tanat-embs.svg)](https://pypi.org/project/tanat-embs/)
+[![CI](https://github.com/TanaT-Lab/tanat-embs/actions/workflows/ci.yml/badge.svg)](https://github.com/TanaT-Lab/tanat-embs/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/TanaT-Lab/tanat-embs/graph/badge.svg)](https://codecov.io/gh/TanaT-Lab/tanat-embs)
 
-```bash
-python -m venv venv
-source venv/bin/activate
-cd TanaT; pip install -e .;cd ..
-```
+## License
+
+MIT License
