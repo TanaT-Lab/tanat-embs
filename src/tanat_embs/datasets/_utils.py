@@ -15,10 +15,7 @@ import torch
 from tanat.metadata.feature import (
     ArrayInfo,
     BooleanInfo,
-    CategoricalInfo,
     NumericalInfo,
-    StringInfo,
-    TemporalInfo,
 )
 from tanat.metadata.sequence import SequenceMetadata
 
@@ -177,7 +174,11 @@ def build_feature_array(
     """
     n_rows = len(row_df)
     if not feature_names:
-        return np.zeros((n_rows, 0), dtype=np.float32).squeeze(0) if n_rows == 1 else np.zeros((n_rows, 0), dtype=np.float32)
+        return (
+            np.zeros((n_rows, 0), dtype=np.float32).squeeze(0)
+            if n_rows == 1
+            else np.zeros((n_rows, 0), dtype=np.float32)
+        )
 
     total_width = max(end for _, end in feature_dims.values())
     out = np.empty((n_rows, total_width), dtype=np.float32)
