@@ -1,0 +1,27 @@
+{
+    "@context": "https://doi.org/10.5063/schema/codemeta-2.0",
+    "@type": "SoftwareSourceCode",
+    "name": "tanat-embs",
+    "description": "Embedding datasets and encoders for TanaT sequence pools",
+    "license": "https://spdx.org/licenses/MIT.html",
+    "codeRepository": "https://github.com/TanaT-Lab/TanaT-embs.git",
+    "issueTracker": "https://github.com/TanaT-Lab/TanaT-embs/issues",
+    "programmingLanguage": "Python",
+    "author": [
+        {
+            "@id": "https://orcid.org/0009-0002-8509-5506",
+            "@type": "Person",
+            "givenName": "Arnaud",
+            "familyName": "Duvermy",
+            "email": "arnaud.duvermy@inria.fr"
+        },
+        {
+            "@id": "https://orcid.org/0000-0002-4909-5843",
+            "@type": "Person",
+            "givenName": "Thomas",
+            "familyName": "Guyet",
+            "email": "thomas.guyet@inria.fr"
+        }
+    ],
+    "url": "https://github.com/TanaT-Lab/TanaT-embs"
+}
