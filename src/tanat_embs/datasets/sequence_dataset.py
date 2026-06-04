@@ -275,7 +275,7 @@ class SequenceDataset(Dataset):
 
         # Features: (T, F)
         feat_arr = build_feature_array(seq_df, self._entity_names, self.feature_dims)
-        if feat_arr.ndim == 1 and T > 1:
+        if feat_arr.ndim == 1:
             feat_arr = feat_arr.reshape(T, -1)
         feat_arr = feat_arr.astype(np.float32)
         feat_arr = apply_fill_value(
