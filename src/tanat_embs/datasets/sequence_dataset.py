@@ -221,6 +221,16 @@ class SequenceDataset(Dataset):
         """Number of sequences in the pool."""
         return len(self._seq_ids)
 
+    def __repr__(self) -> str:
+        static_names = self._static_names or []
+        return (
+            f"{self.__class__.__name__}(len={len(self)}, "
+            f"features={self._entity_names}, "
+            f"static_features={static_names}, "
+            f"max_len={self._max_len}, "
+            f"temporal_encoding={self._temporal_encoding})"
+        )
+
     def __getitem__(self, idx: int) -> dict[str, Any]:
         """Return a full sequence as a dict of tensors.
 

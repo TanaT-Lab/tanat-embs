@@ -230,6 +230,15 @@ class EventDataset(Dataset):
         """Total number of entity rows across all sequences."""
         return len(self._entity_df)
 
+    def __repr__(self) -> str:
+        static_names = self._static_names or []
+        return (
+            f"{self.__class__.__name__}(len={len(self)}, "
+            f"features={self._entity_names}, "
+            f"static_features={static_names}, "
+            f"temporal_encoding={self._temporal_encoding})"
+        )
+
     def __getitem__(self, idx: int) -> dict[str, Any]:
         """Return a single entity row as a dict of tensors.
 
