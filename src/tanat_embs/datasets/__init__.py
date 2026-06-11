@@ -1,3 +1,8 @@
+#!/usr/bin/env python3
+"""
+Dataset package.
+"""
+
 from .event_dataset import EventDataset
 from .sequence_dataset import SequenceDataset
 from .encoding import CategoricalEncoder, CategoricalDecoder
