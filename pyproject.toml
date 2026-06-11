@@ -9,7 +9,7 @@ dependencies = [
     "torch",
     "polars",
     "scikit-learn",
-    "TanaT>=0.10.1",
+    "TanaT>=0.10.3",
 ]
 requires-python = ">=3.10"
 classifiers = [
